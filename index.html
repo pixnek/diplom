@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Название нашего сайта</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="css/styles.css">
+    </head>
+    <body>
+	<a href="/?action=out">Выход</a>
+ 
+        <div id="header">
+            <h2>Создание игрушечного 3D-домика</h2>
+ 
+            <form action = "http://localhost/auth.php" method = "post" >
+ 
+				<label for="login">Логин: </label><input type="email" required id="login" onchange = "ProvLogin(this.text)" placeholder = "Введите ваш e-mail">
+				<label for="password">Пароль: </label><input type="password" required id="password" pattern = "([A-Za-zА-Яа-яЁё0-9]{6,256})" placeholder = "Введите ваш пароль">
+				<input type="submit" name="enter" value="Войти">
+            </div>                
+			<div id="link_register">
+                <a href="/form_register.php">Регистрация</a>	
+        </div>
+		<script type="text/javascript">
+			function S4() {
+				return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+			}
+			function guid() {
+				return (S4() + S4() + "-" + S4() + "-" + S4() + "-" + S4() + "-" + S4() + S4() + S4());
+			}
+			var UserCode = guid();
+			
+			var socket = io.connect(
+            {
+                'forceNew': true,
+                'reconnection': true,
+                'reconnectionDelay': 1000,
+                'reconnectionDelayMax': 5000,
+                'reconnectionAttempts': 5
+            });
+			
+			var delay = 0;
+			socket.emit('game',0,UserCode);
+			socket.on('redirect',function(destination){
+				window.Location.href = destination;
+			});
+			socket.on('stateGame',function(game){
+				
+			});
+			socket.on('finalGame', function (game) {
+				
+			});
+			addEventListener("keyup", function (event) {
+				//1
+				if (event.keyCode === 49) {
+					if(!noEnter){
+						noEnter=true;
+						delay = new Date();
+						socket.emit('move', "1", UserCode);
+						}
+				}
+				//2
+				if (event.keyCode === 50) {
+					if(!noEnter){
+						noEnter=true;
+						delay = new Date();
+						socket.emit('move', "2", UserCode);
+						}
+				}
+				//3
+				if (event.keyCode === 51) {
+					if(!noEnter){
+						noEnter=true;
+						delay = new Date();
+						socket.emit('move', "3", UserCode);
+					}
+				}
+				//enter
+				//if (event.keyCode === 13) {
+				//	delay = new Date();
+				//	if(step=="0"){socket.emit('enter', UserCode);}
+				//}
+			});
+		</script>
+		</body>
+</html>

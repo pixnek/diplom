@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>	
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>research work</title>
+		<script type="text/javascript" src="libs/build/three.js"></script>
+		<script type="text/javascript" src="libs/build/OBJLoader.js"></script>
+		<script type="text/javascript" src="libs/build/OrbitControl.js"></script>
+		<script src="http://code.jquery.com/jquery-1.9.0.js" integrity="sha256-TXsBwvYEO87oOjPQ9ifcb7wn3IrrW91dhj6EMEtRLvM=" crossorigin="anonymous"></script>
+		<style>
+		body{
+		/* set margin to 0 and overflow to hidden, 
+		to use the complete page */
+		margin: 0;
+		overflow: hidden;
+		}
+		#buttonPanel{
+		width:100%;
+		height: 10%;
+		}
+		td{
+		margin: 0;
+		overflow: hidden;
+		}
+		button{
+		width: 100%;
+		height: 100%;
+		}
+		#katalog{
+		position: absolute;
+		display: inline-block;
+		}
+		#WebGL-output{
+		position: absolute;
+		margin-left: 20%;
+		margin-right: 5px;
+		display: inline-block;
+		}
+		</style>
+	</head>
+	<body>
+		<div id="mainPanel">
+		<script>
+		var aspectRatio = 995.0/460.0;
+		var tmp3DCamera;
+		var roomNow;
+		function changeView(){
+			console.log(tmp3DCamera);
+			console.log(camera);
+			if(is2D){
+				console.log("3D");
+				is2D = false;
+				if(tmp3DCamera!=undefined){
+					camera = tmp3DCamera;
+				}else{
+					camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+				}
+				console.log(scene);
+			}else{
+				is2D = true;
+				console.log("2D");
+				var viewSize = 900;
+				tmp3DCamera = camera;
+				if(Rooms.length>0){
+					console.log(Number.parseInt(roomNow.angles[2][0]));
+					console.log(Number.parseInt(roomNow.angles[2][1]));
+					camera = new THREE.OrthographicCamera(0,Number.parseInt(roomNow.angles[2][0]),0,Number.parseInt(roomNow.angles[2][1]),20,-20);
+					camera.rotation.z=Math.PI;
+					camera.rotation.x=-0.5*Math.PI;
+					camera.rotation.y=Math.PI;
+				}else{
+				camera = new THREE.OrthographicCamera(0,20,0,20,20,-20);
+					camera.rotation.z=Math.PI;
+					camera.rotation.x=-0.5*Math.PI;
+					camera.rotation.y=Math.PI;
+				}
+			}
+		}
+		var Rooms = [];
+		function addRoom(width,length){
+			var i = Rooms.length;
+			Rooms[i]={
+				name:"Rooms"+i,
+				angles: [[0,0],[0,width],[length,width],[length,0]],
+				mebels: []
+			};
+			roomNow = Rooms[i];
+			console.log(Rooms[i]);
+			createRoom(width,length);
+		}
+		function createRoom(width,length){
+			var heigth = 13;
+			var planeGeometry1 = new THREE.PlaneGeometry(width, heigth);
+			var planeGeometry2 = new THREE.PlaneGeometry(length,heigth);
+			var planeGeometry3 = new THREE.PlaneGeometry(width, heigth);
+			var planeGeometryFloor = new THREE.PlaneGeometry(width, length);
+			var planeMaterial = new THREE.MeshBasicMaterial({color: 0xcccccc});
+			var floorMaterial = new THREE.MeshBasicMaterial({color: 0x366500});
+			var plane1 = new THREE.Mesh(planeGeometry1, planeMaterial);
+			var plane2 = new THREE.Mesh(planeGeometry2, planeMaterial);
+			var plane3 = new THREE.Mesh(planeGeometry3, planeMaterial);
+			var floor = new THREE.Mesh(planeGeometryFloor, floorMaterial);
+			floor.rotation.x = -0.5*Math.PI;
+			floor.rotation.z = 0.5*Math.PI;
+			floor.position.x=length/2;
+			floor.position.z=width/2;
+			plane1.position.x=0;
+			plane1.position.z=width/2;
+			plane1.position.y=heigth/2;
+			plane1.rotation.y = 0.5*Math.PI;
+			plane2.position.x=length/2;
+			plane2.position.y=heigth/2;
+			plane3.rotation.y = -0.5*Math.PI;
+			plane3.position.x=length;
+			plane3.position.z=width/2;
+			plane3.position.y=heigth/2;
+			scene.add(floor);	
+			scene.add(plane1);
+			scene.add(plane2);
+			scene.add(plane3);
+		}
+		function disp(form){
+			if(form.style.display == "none"){
+				form.style.display = "block";
+			}else{
+				form.style.display = "none";
+			}
+		}
+		</script>
+		<form id="createRoom" style = "display: none;">
+			<input type="text" id="wText" value="Введите ширину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value)) this.value=''">
+			<input type="text" id="hText" value="Введите длину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value))  this.value=''">
+			<input type="button" value="Создать" onClick="addRoom(document.getElementById('wText').value,document.getElementById('hText').value); disp(document.getElementById('createRoom'))">
+			<input type="button" value="Закрыть" onClick="disp(document.getElementById('createRoom'))">
+		</form>
+		<table id="buttonPanel">
+		<tr>
+		<td><button onclick="disp(document.getElementById('createRoom'))">Создать комнату</button></td><td><button onclick="changeView(); if(this.innerText=='2D вид'){this.innerText='3D вид';}else{this.innerText='2D вид';}">3D вид</button></td><td><button>Расставить комнаты</button></td><td><button>Сохранить проект</button></td><td><button>Запрос на распечатку дома</button></td><td><button>Выход</button></td>
+		</tr>
+		</table>
+		</div>
+		<!--Div which will hold the Output --><div id="workSpace">
+		<div id="katalog" width=10% ><table><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr></table></div>
+		<div id="WebGL-output" width=80%>
+		</div>
+		</div>
+		
+		<!--Javascript code that runs our Three.js examples -->
+		<script type="text/javascript">
+		
+		var scene;
+		var camera;
+		var is2D = false;
+		$(function display () {
+		scene = new THREE.Scene();
+
+        // create a camera, which defines where we're looking at.
+
+        camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+		
+		console.log(camera);
+
+
+        // create a render and set the size
+
+        var renderer = new THREE.WebGLRenderer();
+
+		
+var axesHelper = new THREE.AxesHelper( 15 );
+scene.add( axesHelper );
+
+var helper = new THREE.CameraHelper( camera );
+scene.add( helper );
+
+
+
+        renderer.setClearColor(new THREE.Color ());
+
+        renderer.setSize((window.innerWidth/10)*7, (window.innerHeight/10)*9);
+
+        renderer.shadowMap.enabled = true;
+
+		strObj = "resource/stul.obj";
+		strImg = "resource/Stul.jpg"
+		function addObj(strObj, strImg){
+		
+			var img_loader = new THREE.ImageLoader();
+		
+			var texture = new THREE.Texture();
+		
+			img_loader.load(strImg, function(img){
+				texture.image = img;
+				texture.needsUpdate = true;
+				console.log("текстура загрузилась");
+			});
+		
+			var obj_loader = new THREE.OBJLoader();
+		
+			obj_loader.load(strObj,
+			function(obj){
+				console.log(obj);
+				obj.rotation.y = -0.5*Math.PI;
+				obj.children[0].material.map = texture;
+				obj.position.x = 10;
+				obj.position.z = 10;
+				scene.add(obj);
+			},
+			function(xhr){
+				console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+			});
+		}
+		addObj(strObj,strImg);
+        // position and point the camera to the center of the scene
+
+        camera.position.x = -10;
+
+        camera.position.y = 10;
+
+        camera.position.z = 10;
+
+        camera.lookAt(scene.position);
+
+        // add spotlight for the shadows
+
+        var spotLight = new THREE.SpotLight( 0xffffff );
+
+        spotLight.position.set( -40, 60, -10 );
+
+        spotLight.castShadow = true;
+
+        scene.add( spotLight );
+
+
+
+        // add the output of the renderer to the html element
+		
+
+        $("#WebGL-output").append(renderer.domElement);
+
+		var controls = new THREE.OrbitControls (camera,document.getElementById('WebGL-output'));
+		controls.enableZoom = true;
+		controls.update();
+        // call the render function
+
+        var step=0;
+
+        render();
+		animate();
+		function animate(){
+			requestAnimationFrame ( animate );  
+			renderer.render (scene, camera);
+
+		}
+        function render() {
+
+            // rotate the cube around its axes
+
+            //cube.rotation.x += 0.02;
+
+            //cube.rotation.y += 0.02;
+
+            //cube.rotation.z += 0.02;
+
+
+
+            // bounce the sphere up and down
+
+            //sphere.position.x = 20+( 10*(Math.cos(step+=0.001)));
+
+            //sphere.position.y = 2 +( 10*Math.abs(Math.sin(step+=0.001)));
+
+
+
+            // render using requestAnimationFrame
+
+            requestAnimationFrame(render);
+			
+            renderer.render(scene, camera);
+
+        }
+				
+		});
+		</script>
+	</body>
+</html>
