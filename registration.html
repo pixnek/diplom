@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Название нашего сайта</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="css/styles.css">
+		<script type="text/javascript" src="libs/sha256.js"></script>
+		<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    </head>
+    <body>
+        <div id="header">
+            <h1>Создание игрушечного 3D-домика</h1>
+			<h2>Регистрация</h2>
+ 
+            <form onSubmit = "registr(this)">
+ 
+				<label for="login">Логин: </label><input type="email" required id="login" onchange = "" placeholder = "Введите ваш e-mail">
+				<label for="password">Пароль: </label><input type="password" required id="password1" pattern = "([A-Za-zА-Яа-яЁё0-9]{6,256})" placeholder = "Введите ваш пароль">
+				<label for="password">Повторите пароль: </label><input type="password" required id="password2" pattern = "([A-Za-zА-Яа-яЁё0-9]{6,256})" placeholder = "Введите ваш пароль повторно">
+				<input type="submit" name="enter" value="Зарегистрироваться" >
+            </div>      
+
+			<div id="link_register">
+                <a href="/">Авторизоваться</a>	
+			</div>
+		<script type="text/javascript">
+
+			var socket = io.connect(
+            {
+                'forceNew': true,
+                'reconnection': true,
+                'reconnectionDelay': 1000,
+                'reconnectionDelayMax': 5000,
+                'reconnectionAttempts': 5
+            });
+			function registr(form){
+				if(form.password1.value == form.password2.value){
+					var str = form.password1.value;
+					var res = SHA256(str);
+					var login = form.login.value;
+					socket.emit("registration",login,res);
+				}else{
+					alert("Ошибка при подтверждении пароля, введите его еще раз");
+				}
+			}
+			socket.on("RegistrTry",function(){
+				alert("Вы успешно зарегистрировались в системе, теперь можете авторизоваться под своими логином и паролем");
+			});
+			socket.on("RegistrError",function(){
+				alert("При регистрации произошла ошибка");
+			});
+		</script>
+		</body>
+</html>

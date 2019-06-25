@@ -5,7 +5,9 @@
 		<title>research work</title>
 		<script type="text/javascript" src="libs/build/three.js"></script>
 		<script type="text/javascript" src="libs/build/OBJLoader.js"></script>
+		<script type="text/javascript" src="/socket.io/socket.io.js"></script>
 		<script type="text/javascript" src="libs/build/OrbitControl.js"></script>
+		<script type="text/javascript" src="libs/build/TransformControls.js"></script>
 		<script src="http://code.jquery.com/jquery-1.9.0.js" integrity="sha256-TXsBwvYEO87oOjPQ9ifcb7wn3IrrW91dhj6EMEtRLvM=" crossorigin="anonymous"></script>
 		<style>
 		body{
@@ -23,6 +25,7 @@
 		overflow: hidden;
 		}
 		button{
+		text-color:black;
 		width: 100%;
 		height: 100%;
 		}
@@ -40,14 +43,77 @@
 	</head>
 	<body>
 		<div id="mainPanel">
-		<script>
-		var aspectRatio = 995.0/460.0;
-		var tmp3DCamera;
-		var roomNow;
+		
+		<form id="createRoom" style = "display: none;">
+			<input type="text" id="wText" value="Введите ширину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value)) this.value=''">
+			<input type="text" id="hText" value="Введите длину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value))  this.value=''">
+			<input type="button" value="Создать" onClick="addRoom(document.getElementById('wText').value,document.getElementById('hText').value); disp(document.getElementById('createRoom'))">
+			<input type="button" value="Закрыть" onClick="disp(document.getElementById('createRoom'))">
+		</form>
+		<table id="buttonPanel">
+		<tr>
+		<td><button id = "addRoomButton" onclick="disp(document.getElementById('createRoom'))">Создать комнату</button></td><td><button id = "view" onclick="changeView(); if(this.innerText=='2D вид'){this.innerText='3D вид';}else{this.innerText='2D вид';}">3D вид</button></td><td><button id = "setRooms">Расставить комнаты</button></td><td><button id = "saveProject" onclick = "saveProjectOn()">Сохранить проект</button></td><td><button id = "zapros">Запрос на распечатку дома</button></td><td><button id = "exit">Выход</button></td>
+		</tr>
+		</table>
+		</div>
+		<!--Div which will hold the Output --><div id="workSpace">
+		<div id="katalog" width=10% ></div>
+		<div id="WebGL-output" width=80%>
+		</div>
+		</div>
+		
+		<!--Javascript code that runs our Three.js examples -->
+		<script type="text/javascript">
+		var aspectRatio = 995.0/460.0;//Соотношение сторон
+		var tmp3DCamera;//переменная для сохранения 3D камеры
+		var roomNow;//id комнаты, которая отображена сейчас
+		var raycaster = new THREE.Raycaster();// отслеживаем положение мыши на canvas
+		var mouse = new THREE.Vector2();//переменная для Raycast	
+		var Rooms = [];//хранит в себе информацию о комнатах
+		var camera;//Для переключения камеры (одна переменная, два типа камер)
+		var scene;//переменная сцены
+		var is2D = false;//отслеживаем в каком режиме камера(true - 2D, false - 3D)
+		var orbit, controls;//переменные orbit и transform controls соответсвенно
+		var objId = 0;//счетчик добавленных объектов
+		var renderer;//переменная рендера
+		var changeMebel = true;//флаг перемещения объекта (true - объект перемещается, false - объект не перемещается)
+		var floor;//переменная содержащая пол комнаты
+		var mebelObj;//Объект который перемещаем
+		var offset;//offset координаты div-элемента WebGL-output
+		var x;//offset.left
+		var y;//offset.top
+		var inW, inH;//размеры div-элемента WebGL-ouput
+		var addMebel = false;//флаг добавления мебели (true - добавляется, false - не добавляется)
+		var path;//переменная содержащая путь до объекта из картинки
+		var firstEnter = true; // флаг первой загрузки страницы за сеанс
+		var socket = io.connect(
+            {
+                'forceNew': true,
+                'reconnection': true,
+                'reconnectionDelay': 1000,
+                'reconnectionDelayMax': 5000,
+                'reconnectionAttempts': 5
+            });
+		
+		
+		init();
+		animate();
+		render();
+		
+		function saveProjectOn(){
+			socket.emit("save",Rooms);
+		}
+		
 		function changeView(){
-			console.log(tmp3DCamera);
-			console.log(camera);
+			clearTable();
 			if(is2D){
+				document.getElementById("addRoomButton").disabled=false;
+				//socket.emit("rooms");
+				document.getElementById("WebGL-output").removeEventListener( 'mousedown', onMouseDown, false );
+				document.getElementById("WebGL-output").removeEventListener( 'mouseup', onMouseUp, false );
+				document.getElementById("WebGL-output").removeEventListener( 'mousemove', onMove, false );
+				orbit.enabled = true;
+				changeMebel = true;
 				console.log("3D");
 				is2D = false;
 				if(tmp3DCamera!=undefined){
@@ -55,28 +121,47 @@
 				}else{
 					camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
 				}
-				console.log(scene);
+				viewKatalogRooms();
 			}else{
+				document.getElementById("addRoomButton").disabled = "disabled";
+				socket.emit("spis");
 				is2D = true;
-				console.log("2D");
+				changeMebel = false;
+				orbit.enabled = false;
 				var viewSize = 900;
 				tmp3DCamera = camera;
 				if(Rooms.length>0){
-					console.log(Number.parseInt(roomNow.angles[2][0]));
-					console.log(Number.parseInt(roomNow.angles[2][1]));
-					camera = new THREE.OrthographicCamera(0,Number.parseInt(roomNow.angles[2][0]),0,Number.parseInt(roomNow.angles[2][1]),20,-20);
+					console.log(Number.parseInt(Rooms[roomNow].angles[2][0]));
+					console.log(Number.parseInt(Rooms[roomNow].angles[2][1]));
+					var l = Number.parseInt(Rooms[roomNow].angles[2][0]);
+					var w = Number.parseInt(Rooms[roomNow].angles[2][1]);
+					console.log(l+"\t"+w);
+					if(l>w){
+						camera = new THREE.OrthographicCamera(0,l,-((l-w)/2),w+((l-w)/2),20,-20);	
+					}else{ if(w>l){
+							camera = new THREE.OrthographicCamera(-((w-l)/2),l+((w-l)/2),0,w,20,-20);
+						}else{
+							camera = new THREE.OrthographicCamera(0,l,0,w,20,-20);
+						}
+					}
+					console.log(camera);
 					camera.rotation.z=Math.PI;
 					camera.rotation.x=-0.5*Math.PI;
 					camera.rotation.y=Math.PI;
 				}else{
-				camera = new THREE.OrthographicCamera(0,20,0,20,20,-20);
+					camera = new THREE.OrthographicCamera(0,15,0,15,15,-15);
 					camera.rotation.z=Math.PI;
 					camera.rotation.x=-0.5*Math.PI;
 					camera.rotation.y=Math.PI;
 				}
+				//control = new THREE.TransformControls( camera, document.getElementById('WebGL-output') );
+				//control.addEventListener( 'change', render, true);
+				document.getElementById("WebGL-output").addEventListener( 'mousedown', onMouseDown, false );
+				document.getElementById("WebGL-output").addEventListener( 'mouseup', onMouseUp, false );
+				document.getElementById("WebGL-output").addEventListener( 'mousemove', onMove, false );
 			}
 		}
-		var Rooms = [];
+		
 		function addRoom(width,length){
 			var i = Rooms.length;
 			Rooms[i]={
@@ -84,26 +169,31 @@
 				angles: [[0,0],[0,width],[length,width],[length,0]],
 				mebels: []
 			};
-			roomNow = Rooms[i];
-			console.log(Rooms[i]);
-			createRoom(width,length);
+			roomNow = i;
+			console.log(i);
+			viewRoom(roomNow);
+			clearTable();
+			viewKatalogRooms();
+			//createRoom(width,length);
 		}
+		
 		function createRoom(width,length){
-			var heigth = 13;
-			var planeGeometry1 = new THREE.PlaneGeometry(width, heigth);
-			var planeGeometry2 = new THREE.PlaneGeometry(length,heigth);
-			var planeGeometry3 = new THREE.PlaneGeometry(width, heigth);
-			var planeGeometryFloor = new THREE.PlaneGeometry(width, length);
+			var heigth = 3;
+			var planeGeometry1 = new THREE.PlaneGeometry(width, heigth,0.05,0.05);
+			var planeGeometry2 = new THREE.PlaneGeometry(length,heigth,0.05,0.05);
+			var planeGeometry3 = new THREE.PlaneGeometry(width, heigth,0.05,0.05);
+			var planeGeometryFloor = new THREE.PlaneBufferGeometry(width, length, 16, 16);
 			var planeMaterial = new THREE.MeshBasicMaterial({color: 0xcccccc});
-			var floorMaterial = new THREE.MeshBasicMaterial({color: 0x366500});
+			var floorMaterial = new THREE.MeshBasicMaterial({color: 366500, alphaTest: 0, side:THREE.DoubleSide});
 			var plane1 = new THREE.Mesh(planeGeometry1, planeMaterial);
 			var plane2 = new THREE.Mesh(planeGeometry2, planeMaterial);
 			var plane3 = new THREE.Mesh(planeGeometry3, planeMaterial);
-			var floor = new THREE.Mesh(planeGeometryFloor, floorMaterial);
+			floor = new THREE.Mesh(planeGeometryFloor, floorMaterial);
 			floor.rotation.x = -0.5*Math.PI;
 			floor.rotation.z = 0.5*Math.PI;
 			floor.position.x=length/2;
 			floor.position.z=width/2;
+			floor.userData.name = "floor";
 			plane1.position.x=0;
 			plane1.position.z=width/2;
 			plane1.position.y=heigth/2;
@@ -114,11 +204,16 @@
 			plane3.position.x=length;
 			plane3.position.z=width/2;
 			plane3.position.y=heigth/2;
+			plane1.userData.name = "wall";
+			plane2.userData.name = "wall";
+			plane3.userData.name = "wall";
+			floor.userData.name = "wall";
 			scene.add(floor);	
 			scene.add(plane1);
 			scene.add(plane2);
 			scene.add(plane3);
 		}
+		
 		function disp(form){
 			if(form.style.display == "none"){
 				form.style.display = "block";
@@ -126,159 +221,360 @@
 				form.style.display = "none";
 			}
 		}
-		</script>
-		<form id="createRoom" style = "display: none;">
-			<input type="text" id="wText" value="Введите ширину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value)) this.value=''">
-			<input type="text" id="hText" value="Введите длину комнаты" onkeyup="var textfield = /['А-я','A-z','\s']/; if(textfield.test(this.value))  this.value=''">
-			<input type="button" value="Создать" onClick="addRoom(document.getElementById('wText').value,document.getElementById('hText').value); disp(document.getElementById('createRoom'))">
-			<input type="button" value="Закрыть" onClick="disp(document.getElementById('createRoom'))">
-		</form>
-		<table id="buttonPanel">
-		<tr>
-		<td><button onclick="disp(document.getElementById('createRoom'))">Создать комнату</button></td><td><button onclick="changeView(); if(this.innerText=='2D вид'){this.innerText='3D вид';}else{this.innerText='2D вид';}">3D вид</button></td><td><button>Расставить комнаты</button></td><td><button>Сохранить проект</button></td><td><button>Запрос на распечатку дома</button></td><td><button>Выход</button></td>
-		</tr>
-		</table>
-		</div>
-		<!--Div which will hold the Output --><div id="workSpace">
-		<div id="katalog" width=10% ><table><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr><tr><td><button>Кнопка с текстом</button></td><td><button>Кнопка с текстом</button></td></tr></table></div>
-		<div id="WebGL-output" width=80%>
-		</div>
-		</div>
 		
-		<!--Javascript code that runs our Three.js examples -->
-		<script type="text/javascript">
+		function faddMebel(tpath){
+			path = tpath.split(";");
+			console.log(path);
+			addMebel = true;
+			console.log(addMebel);
+			changeBlockAllbutton(false);
+		}
 		
-		var scene;
-		var camera;
-		var is2D = false;
-		$(function display () {
-		scene = new THREE.Scene();
-
-        // create a camera, which defines where we're looking at.
-
-        camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+		function changeBlockAllbutton(b){
+			if(b){
+				document.getElementById("setRooms").disabled=false;
+				document.getElementById("view").disabled=false;
+				document.getElementById("saveProject").disabled=false;
+				document.getElementById("zapros").disabled=false;
+				document.getElementById("exit").disabled=false;
+			}else{
+				document.getElementById("setRooms").disabled="disabled";
+				document.getElementById("view").disabled="disabled";
+				document.getElementById("saveProject").disabled="disabled";
+				document.getElementById("zapros").disabled="disabled";
+				document.getElementById("exit").disabled="disabled";
+			}
+		}
 		
-		console.log(camera);
-
-
-        // create a render and set the size
-
-        var renderer = new THREE.WebGLRenderer();
-
+		function onMouseDown( event ) {
+			socket.emit("update");
+			if(!addMebel){
+				if(!changeMebel){
+					changeBlockAllbutton(false);
+					offset = jQuery('#WebGL-output').offset();
+					inW = jQuery('#WebGL-output').innerWidth();
+					inH = jQuery('#WebGL-output').innerHeight();
+					x = offset.left;
+					y = offset.top;
+					x=~~x;
+					y=~~y;
+					mouse.x = ( (event.clientX-x) / inW )*2-1;
+					mouse.y = -( (event.clientY-y) / inH )*2+1;
+					raycaster.setFromCamera( mouse, camera );			
+					var intersects = raycaster.intersectObjects( scene.children, true);
+					if(intersects.length>0){
+						for(var i=0;i<intersects.length;i++){
+							if(intersects[i].object.parent.userData.name!==undefined){
+								if(intersects[i].object.parent.userData.name.indexOf("mebel")==0){
+									changeMebel = true;
+									mebelObj = intersects[i].object.parent;
+								}
+							}
+						}
+					}
+				}
+			}else{
+				offset = jQuery('#WebGL-output').offset();
+				inW = jQuery('#WebGL-output').innerWidth();
+				inH = jQuery('#WebGL-output').innerHeight();
+				x = offset.left;
+				y = offset.top;
+				x=~~x;
+				y=~~y;
+				mouse.x = ( (event.clientX-x) / inW )*2-1;
+				mouse.y = -( (event.clientY-y) / inH )*2+1;
+				raycaster.setFromCamera( mouse, camera );
+				
+				var floorIntersects = raycaster.intersectObjects([floor],true)||false;
+				if(floorIntersects === false) return;
+				if(floorIntersects.length>0){
+					var tposition=[];
+					tposition[0] = floorIntersects[0].point.x;
+					tposition[1] = floorIntersects[0].point.z;
+					var strObj = path[0];
+					if(path[1]==null||path[1] === undefined){
+						var strImg = undefined;
+					}else{
+						var strImg = path[1];
+					}
+					changeBlockAllbutton(true);
+					addObj(strObj,strImg,tposition);
+					addMebel = false;
+				}else{ 
+					return;
+				}
+			}
+		}
 		
-var axesHelper = new THREE.AxesHelper( 15 );
-scene.add( axesHelper );
-
-var helper = new THREE.CameraHelper( camera );
-scene.add( helper );
-
-
-
-        renderer.setClearColor(new THREE.Color ());
-
-        renderer.setSize((window.innerWidth/10)*7, (window.innerHeight/10)*9);
-
-        renderer.shadowMap.enabled = true;
-
-		strObj = "resource/stul.obj";
-		strImg = "resource/Stul.jpg"
-		function addObj(strObj, strImg){
+		function onMove( event ){
+			if(changeMebel){
+				mouse.x = ( (event.clientX-x) / inW )*2-1;
+				mouse.y = -( (event.clientY-y) / inH)*2+1;
+				raycaster.setFromCamera( mouse, camera );
+				var floorIntersects = raycaster.intersectObjects([floor],true)||false;
+				if(floorIntersects === false) return;
+				if(floorIntersects.length>0){
+					mebelObj.position.x = floorIntersects[0].point.x;
+					mebelObj.position.z = floorIntersects[0].point.z;
+				}else{ return;}
+			}
+		}
+		function onMouseUp( event ){
+			if(changeMebel){
+				changeBlockAllbutton(true);
+				changeMebel = false;
+				var iMebel = -1;
+				for(var i=0;i<Rooms[roomNow].mebels.length;i++){
+					if(Rooms[roomNow].mebels[i][name] == mebelObj.userData.name){
+						Rooms[roomNow].mebels[i][position] = mebelObj.position;
+						Rooms[roomNow].mebels[i][rotation] = mebelObj.rotation;
+						break;
+					}
+				}
+				console.log(Rooms);
+			}
+		}
 		
-			var img_loader = new THREE.ImageLoader();
 		
-			var texture = new THREE.Texture();
-		
-			img_loader.load(strImg, function(img){
-				texture.image = img;
-				texture.needsUpdate = true;
-				console.log("текстура загрузилась");
-			});
-		
+		function addObj(strObj,strImg,position,rotation){
+			if(strImg !== undefined){
+				var img_loader = new THREE.ImageLoader();
+			
+				var texture = new THREE.Texture();
+			
+				img_loader.load(strImg, function(img){
+					texture.image = img;
+					texture.needsUpdate = true;
+				});
+			}
 			var obj_loader = new THREE.OBJLoader();
-		
-			obj_loader.load(strObj,
-			function(obj){
-				console.log(obj);
+			obj_loader.load(strObj,function(obj){
 				obj.rotation.y = -0.5*Math.PI;
-				obj.children[0].material.map = texture;
-				obj.position.x = 10;
-				obj.position.z = 10;
+				if(texture !== undefined)obj.children[0].material.map = texture;
+				console.log(position);
+				obj.position.x = position.x||position[0]||0;
+				obj.position.z = position.z||position[1]||0;
+				if((rotation !== undefined)&&(rotation.x !== undefined) && (rotation.x !== undefined) && (rotation.y !== undefined)){
+					obj.rotation.set(rotation.x,rotation.y,rotation.z);
+				}
+				obj.userData.name = 'mebel'+objId;
+				Rooms[roomNow].mebels[objId]={name : obj.userData.name, pathObj : strObj, pathImg : strImg, position : obj.position, rotation : obj.rotation };
+				objId++;
 				scene.add(obj);
 			},
 			function(xhr){
 				console.log((xhr.loaded / xhr.total * 100) + '% loaded');
 			});
 		}
-		addObj(strObj,strImg);
-        // position and point the camera to the center of the scene
+		function clearTable(){
+			var table = document.getElementById("katalog");
+			while(table.firstChild){
+				table.removeChild(table.firstChild);
+			}
+		}
+		function notEnterZapretSymbol(str){
+		console.log(str);
+		if(str.indexOf(':')!=-1)return false;
+		if(str.indexOf(';')!=-1)return false;
+		if(str.indexOf(' ')!=-1)return false;
+		if(str.indexOf('{')!=-1)return false;
+		if(str.indexOf('}')!=-1)return false;
+		if(str.indexOf('"')!=-1)return false;
+		if(str.indexOf("'")!=-1)return false;
+		if(str.indexOf('.')!=-1)return false;
+		if(str.indexOf(',')!=-1)return false;
+		if(str.indexOf('<')!=-1)return false;
+		if(str.indexOf('?')!=-1)return false;
+		if(str.indexOf('>')!=-1)return false;
+		if(str.indexOf('@')!=-1)return false;
+		if(str.indexOf('#')!=-1)return false;
+		if(str.indexOf('$')!=-1)return false;
+		if(str.indexOf('^')!=-1)return false;
+		if(str.indexOf('%')!=-1)return false;
+		if(str.indexOf('&')!=-1)return false;
+		if(str.indexOf('*')!=-1)return false;
+		if(str.indexOf('(')!=-1)return false;
+		if(str.indexOf(')')!=-1)return false;
+		return true;
+	}
+		if(firstEnter){
+			firstEnter = false;
+			socket.emit("first");
+		}
+		socket.on("getProject",function(project){
+			for(var i =0;i< project.length;i++){
+				if(notEnterZapretSymbol(project[i].name)){
+					var name = project[i].name;
+					if(project[i].angles.length!=4){
+						hackerHier();
+						return;
+					}else{
+						Rooms[i] = project[i];
+					}
+				}else{
+					hackerHier();
+					return;
+				}
+			}
+			viewKatalogRooms();
+		});
+		socket.on("ErrorSave",function(){
+			alert('При соединении с сервером произошла ошибка');
+		});
+		function viewKatalogRooms(){
+			var length = Rooms.length;
+			if(length>0){
+				var insTable = document.getElementById("katalog");
+				var rows;
+				if(length%2==0){
+					rows = ~~(length/2);
+				}else{
+					rows = ~~(length/2)+1;
+				}
+				columns = 2;
+				tr = "";
+				td = "";
+				var tmpI = 0;
+				var table = document.createElement("table");
+				for(var i = 0; i< rows;i++){
+					tr = document.createElement("tr");
+					for(var j = 0; j < 2; j++){
+						if((i==rows-1) &&(length%2==1)&&(j==1)){
+							break;
+						}
+						td = document.createElement("td");
+						var button = document.createElement("button");
+						var name = (i*2)+j;
+						var value = Rooms[name].name;
+						button.name = name;
+						button.id = tmpI;
+						tmpI++;
+						button.value = value;
+						button.style.width = parseInt(window.innerWidth/15)+'px';
+						button.style.height = parseInt(window.innerHeight/10)+'px';
+						button.onclick = function(){
+							viewRoom(this.name);
+						};
+						td.appendChild(button);
+						tr.appendChild(td);
+					}
+					table.appendChild(tr);
+				}
+				insTable.appendChild(table);
+			}
+		}
+		function viewRoom(number){
+			for(var i = 0; i< scene.children.length;i++){
+				if(scene.children[i].userData.name !== undefined){
+					if((scene.children[i].userData.name == "wall")||(scene.children[i].userData.name.indexOf("mebel")==0)){
+						scene.remove(scene.children[i]);
+						i--;
+					}
+				}
+			}
+			roomNow = number;
+			createRoom(Rooms[number].angles[2][1],Rooms[number].angles[2][0]);
+			var tmpMebel = Rooms[number].mebels;
+			objId = tmpMebel.length;
+			for(var i=0;i<tmpMebel.length;i++){
+				addObj(tmpMebel[i].pathObj,tmpMebel[i].pathImg,tmpMebel[i].position,tmpMebel[i].rotation);
+			}
+		}
+		function hackerHier(){
+			alert("При попытке получить данные с сервера, замечено изменение данных. Возможно ваши данные перехватывает злоумышленник, просим вас перезайти в систему.");
+		}
+		socket.on("spis",function (spisok){
+			var length = spisok.length;
+			if(length>0){
+				var insTable = document.getElementById("katalog");
+				var rows;
+				if(length%2==0){
+					rows = ~~(length/2);
+				}else{
+					rows = ~~(length/2)+1;
+				}
+				columns = 2;
+				tr = "";
+				td = "";
+				var table = document.createElement("table");
+				for(var i = 0; i< rows;i++){
+					tr = document.createElement("tr");
+					for(var j = 0; j < 2; j++){
+						if((i==rows-1) &&(length%2==1)&&(j==1)){
+							break;
+						}
+						td = document.createElement("td");
+						var img = document.createElement("img");
+						var a = spisok[(i*2)+j].pathImg;
+						img.src = a;
+						img.alt = spisok[(i*2)+j].pathObj+";"+spisok[(i*2)+j].pathTex;
+						img.className = "mebel";
+						img.onclick = function(){
+							faddMebel(this.alt);
+						};x
+						td.appendChild(img);
+						tr.appendChild(td);
+					}
+					table.appendChild(tr);
+				}
+				insTable.appendChild(table);
+			}
+		});
+		function init () {
+			scene = new THREE.Scene();
 
-        camera.position.x = -10;
+			camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+			
+			renderer = new THREE.WebGLRenderer();
 
-        camera.position.y = 10;
+			renderer.setClearColor(new THREE.Color ());
+			renderer.setSize((window.innerWidth/10)*7, (window.innerHeight/10)*9);
+			renderer.shadowMap.enabled = true;
+			
+			camera.position.x = -10;
+			camera.position.y = 10;
+			camera.position.z = 10;
+			camera.lookAt(scene.position);
 
-        camera.position.z = 10;
-
-        camera.lookAt(scene.position);
-
-        // add spotlight for the shadows
-
-        var spotLight = new THREE.SpotLight( 0xffffff );
-
-        spotLight.position.set( -40, 60, -10 );
-
-        spotLight.castShadow = true;
-
-        scene.add( spotLight );
-
-
-
-        // add the output of the renderer to the html element
+			var spotLight = new THREE.SpotLight( 0xffffff );
+			spotLight.position.set( -40, 60, -10 );
+			spotLight.castShadow = true;
+			scene.add( spotLight );
+			
+			orbit = new THREE.OrbitControls (camera,document.getElementById('WebGL-output'));
+			orbit.enableZoom = true;
+			orbit.update();
+			orbit.addEventListener( 'change', render, true);
+			
+			$("#WebGL-output").append(renderer.domElement);
+		}
 		
-
-        $("#WebGL-output").append(renderer.domElement);
-
-		var controls = new THREE.OrbitControls (camera,document.getElementById('WebGL-output'));
-		controls.enableZoom = true;
-		controls.update();
-        // call the render function
-
-        var step=0;
-
-        render();
-		animate();
+		function render() {
+			requestAnimationFrame(render);
+			renderer.render(scene, camera);
+		} 
+		
 		function animate(){
 			requestAnimationFrame ( animate );  
 			renderer.render (scene, camera);
-
 		}
-        function render() {
-
-            // rotate the cube around its axes
-
-            //cube.rotation.x += 0.02;
-
-            //cube.rotation.y += 0.02;
-
-            //cube.rotation.z += 0.02;
-
-
-
-            // bounce the sphere up and down
-
-            //sphere.position.x = 20+( 10*(Math.cos(step+=0.001)));
-
-            //sphere.position.y = 2 +( 10*Math.abs(Math.sin(step+=0.001)));
-
-
-
-            // render using requestAnimationFrame
-
-            requestAnimationFrame(render);
-			
-            renderer.render(scene, camera);
-
-        }
-				
+		addEventListener("keyup", function (event) {
+			//1
+			if (event.keyCode === 37) {
+				if(changeMebel){
+				mebelObj.rotation.set(mebelObj.rotation.x,mebelObj.rotation.y-Math.PI/4,mebelObj.rotation.z);
+				}
+			}
+			if(event.keyCode === 39){
+				if(changeMebel){
+				mebelObj.rotation.set(mebelObj.rotation.x,mebelObj.rotation.y+Math.PI/4,mebelObj.rotation.z);
+				}
+			}
+			if(event.keyCode === 46){
+				if(changeMebel){
+					scene.remove(mebelObj);
+				}
+			}
 		});
 		</script>
 	</body>
