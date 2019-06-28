@@ -145,8 +145,9 @@ if(cluster.isWorker){
 								}});
 							}
 							res.cookie('cookieName',idUser,{maxAge:900000, httpOnly: true});
+						res.redirect("/");
+						});
 					}
-					res.redirect("/");
 				});
 			});
 	});	
