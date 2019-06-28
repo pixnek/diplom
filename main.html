@@ -52,7 +52,7 @@
 		</form>
 		<table id="buttonPanel">
 		<tr>
-		<td><button id = "addRoomButton" onclick="disp(document.getElementById('createRoom'))">Создать комнату</button></td><td><button id = "view" onclick="changeView(); if(this.innerText=='2D вид'){this.innerText='3D вид';}else{this.innerText='2D вид';}">3D вид</button></td><td><button id = "setRooms">Расставить комнаты</button></td><td><button id = "saveProject" onclick = "saveProjectOn()">Сохранить проект</button></td><td><button id = "zapros">Запрос на распечатку дома</button></td><td><button id = "exit">Выход</button></td>
+		<td><button id = "addRoomButton" onclick="disp(document.getElementById('createRoom'))">Создать комнату</button></td><td><button id = "view" onclick="changeView(); if(this.innerText=='2D вид'){this.innerText='3D вид';}else{this.innerText='2D вид';}">3D вид</button></td><td><button id = "setRooms">Расставить комнаты</button></td><td><button id = "saveProject" onclick = "saveProjectOn()">Сохранить проект</button></td><td><button id = "zapros">Запрос на распечатку дома</button></td><td><button id = "exit" onclick="logout()">Выход</button></td>
 		</tr>
 		</table>
 		</div>
@@ -103,7 +103,10 @@
 		function saveProjectOn(){
 			socket.emit("save",Rooms);
 		}
-		
+		function logout(){
+			socket.emit("logout");
+		}
+
 		function changeView(){
 			clearTable();
 			if(is2D){
@@ -483,6 +486,9 @@
 		function hackerHier(){
 			alert("При попытке получить данные с сервера, замечено изменение данных. Возможно ваши данные перехватывает злоумышленник, просим вас перезайти в систему.");
 		}
+		socket.on("logout",function(){
+			window.location.href='';
+		});
 		socket.on("spis",function (spisok){
 			var length = spisok.length;
 			if(length>0){

@@ -179,6 +179,8 @@ if(cluster.isWorker){
 				db.collection("cookies").findOne({idUser:cookie},function(err,doc){
 					if(doc===null){
 						console.log("не найдена сессия");
+						response.clearCookie('cookieName');
+						response.redirect('/');
 						return false;
 					}else{
 						console.log("найдена сессия");
@@ -219,15 +221,6 @@ if(cluster.isWorker){
 		}
         response.sendFile(__dirname + '/registration.html');
     });
-	app.get('/logout',(req,res) => {
-		req.session.destroy((err) => {
-			if(err) {
-				return console.log(err);
-			}
-			res.redirect('/');
-		});
-
-	});
 	
 	http.listen(app.get('port'), function () {
         console.log('listening on port', app.get('port'));
@@ -261,6 +254,7 @@ if(cluster.isWorker){
 							}
 						});
 						console.log("не найдена сессия");
+						socket.emit("logout");
 						return false;
 					}else{
 						console.log("найдена сессия");
@@ -283,8 +277,7 @@ if(cluster.isWorker){
 									return
 								}
 							});
-							response.clearCookie('cookieName');
-							response.redirect('/');
+							socket.emit("logout");
 						}
 						return true;
 					}
@@ -447,6 +440,62 @@ if(cluster.isWorker){
 					if(err) return;
 					var spisok = results;
 					socket.emit("spis",spisok);
+				});
+			});
+		});
+		socket.on("logout",function(){
+			var a = socket.request.headers.cookie;
+			var b = cookie.parse(a);
+			var bcookie = b.cookieName;
+			if(!IsCookie(bcookie)){
+				console.log("попытка инъекции");
+				return false;
+			}
+			mongoClient.connect(function(err,client){
+				const db = client.db("usersdb");
+				console.log("соединение установлено");
+				db.collection("cookies").findOne({idUser:bcookie},function(err,doc){
+					if(doc===null){
+						var ip = (socket.request.headers['x-forwarded-for'] || '').split(',').pop() || socket.request.connection.remoteAddress || socket.request.socket.remoteAddress || socket.request.connection.socket.remoteAddress;
+						var content = new Date()+"\t" +ip+"\t"+tlogin+"\t"+tpass+"\tпопытка выйти, используя старый куки или срок сессии истек\n";
+						fs.appendFile('log.wgl', content, (err) => {
+							if (err) {
+								console.log("При добавления лога возникла ошибка");
+								return
+							}
+						});
+						console.log("не найдена сессия");
+						return false;
+					}else{
+						console.log("найдена сессия");
+						var ip = (socket.request.headers['x-forwarded-for'] || '').split(',').pop() || socket.request.connection.remoteAddress || socket.request.socket.remoteAddress || socket.request.connection.socket.remoteAddress;
+						const crypt = require('crypto');
+						console.log(ip);
+						const hash = crypt.createHash('sha256');
+						var result = bcookie+ip;
+						const hash1 = crypt.createHash('sha256');
+						hash1.update(result);
+						var tmp = hash1.digest('hex');
+						var t = doc['value'].indexOf(tmp);
+						if(t==0){
+							db.collection("cookies").deleteOne({idUser:bcookie},function(err,result){
+								if(err){
+									console.log("ошибка при удалении сессии");
+								}
+							});
+							socket.emit("logout");
+						}else{
+							var content = new Date()+"\t" +ip+"\t"+tlogin+"\t"+tpass+"\tпопытка выйти, используя старый куки\n";
+							fs.appendFile('log.wgl', content, (err) => {
+								if (err) {
+									console.log("При добавления лога возникла ошибка");
+									return
+								}
+							});
+							socket.emit("logout");
+						}
+						return true;
+					}
 				});
 			});
 		});
